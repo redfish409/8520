@@ -1,0 +1,8 @@
+---
+title: "Stemming"
+format: html
+---
+
+# Doing stemming
+
+What is stemming? Stemming is taking a word, like "Stemming" and shortening it into its stem word. In this case it is "stem." This can be useful for picking up things the frequency of words like rhetoric and rhetorical--other approahces would see these as the same word. 
