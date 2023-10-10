@@ -1,0 +1,202 @@
+---
+title: "De-stemming TC journal abstracts in 8520"
+author: "Stuart Deets"
+format: html
+code-overflow: wrap
+toc: true
+toc-location: left
+echo: TRUE
+---
+
+# What are we doing?
+
+De-stemming is the process by which we tell Rstudio to de-stem words. This removes the suffixes from words according to the SnowballC dictionary. We'll see what happens when we apply this approach to the Technical Communication journals data set.
+
+# Why are we doing this?
+
+One limitation of looking at whole words within corpuses is that they may miss words that are close in the characters and meaning they have, but are different. For instance, one word that may show up differently within a corpus is *communication* and *communicators*. These are different words, with different meanings, but consider a word like "guidelines" and "guideline." Less nuanced computational approaches may interpret this as a single word, despite the fact that they are clearly similar. If, within our dataset, we found that "guidelin" was a word that was more significant when "guideline" and "guidelines" were as individuals, that would be a signal that guidelines are more important than whole-word analyses would suggest, within Technical Communication.
+
+# Load packages
+
+```{r}
+#| results: hide
+# load quanteda family of packages
+library(quanteda)
+library(quanteda.dictionaries)
+library(quanteda.textmodels)
+library(quanteda.textplots)
+library(quanteda.textstats)
+library(rmarkdown)
+library(reactable)
+
+# load other libraries
+library(readtext)
+library(spacyr)
+library(tidyverse)
+library(dplyr)
+library(SnowballC) # Technically we don't need to install this because quanteda already contains a stemming function, but it's good to know multiple ways to approach problems. 
+```
+
+# Loading data
+
+```{r}
+# define location of datafile
+data_file <- "tc_journals.RData" # make sure that you have your tc_journals.RData saved in a folder called "data"
+
+# load data
+load(data_file)
+```
+
+# Creating a corpus
+
+Here, we are using the "corpus" function to transform tc_journals into the kind of data we want. Here, we're taking the "abstract" field and creating abstract_corpus.
+
+```{r}
+# Creating a corpus
+abstract_corpus <- corpus(tc_journals, text_field = "abstract")
+```
+
+# Now creating some tokens
+
+Then, we want to create tokens.
+
+::: {.callout-note appearance="default"}
+## What are tokens?
+
+Tokens are the building blocks of textual data, and they are usually words, but they can also be phrases, subword units, punctuation marks, and more.
+
+We want to create them because our text has to be tokenized (made legible as a particular kind of data) in order to run the next steps on it.
+:::
+
+```{r}
+# Making some tokens
+abstract_tokens <- tokens(abstract_corpus, remove_punct = TRUE,
+                          remove_separators = TRUE,
+                          remove_numbers = TRUE)
+```
+
+# Removing stop words
+
+We are removing the stop words because they are common words that may or may not add to the unique meaning of a document.
+
+```{r}
+# removing stopwords, creating a new tokens object.
+abstract_tokens_no_stop <- abstract_tokens %>% 
+  tokens_remove(stopwords("en"))
+```
+
+::: {.callout-note appearance="default" collapse="true"}
+## How to find the list of stop words
+
+You can find the list of stopwords by running the code below. If you really wanted to, I bet that you could customize the list of stopwords. But I don't know how to do that.
+
+```{r}
+stopwords("en")
+```
+:::
+
+# Here is the fun bit--de-stemming the words!
+
+Depending on the input data type, different functions are appropriate. "tokens_wordstem" returns a tokens object, char_wordstem returns a character object, and dfm_wordstem returns a document-feature matrix. Right now, because we have a tokens object, we are going to use "tokens_wordstem." Remember that this is a function included as part of quanteda. Read more about the backend of the function [here](https://snowballstem.org/) and see a demo [here](https://snowballstem.org/demo.html).
+
+```{r}
+# Stemming, using quanteda
+abstracts_stemmed <- tokens_wordstem(
+  abstract_tokens_no_stop,
+  language = "english")
+
+```
+
+A brief note on my syntax here--I try to put different variables in a long-ish function on different lines because I find that it's more readable than when it's on one big long line. You may need to find a setting called "soft wrap long lines."
+
+# Exploring the data
+
+```{r}
+# Making a document-feature matrix
+dfm_abstract <- dfm(
+  abstracts_stemmed,
+  tolower = TRUE,
+  remove_padding = FALSE
+)
+
+# checking out the top features, making a data set out of the top features
+topfeatures(dfm_abstract, 100)
+
+```
+
+```{r}
+# grabbing only the top 25 most frequent tokens
+abstracts_top_25_stems <- textstat_frequency(dfm_abstract, n = 25)
+
+# sorting by frequency
+abstracts_top_25_stems$feature <- with(
+  abstracts_top_25_stems,
+  reorder(feature, -frequency))
+
+# making a graph, hell yea
+ggplot(abstracts_top_25_stems, aes(
+  x = feature, y = frequency)) + 
+  geom_point() +
+  theme(axis.text = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Top 25 stems in TC article abstracts 2005-2023")
+
+```
+
+if you wanted to, you can subsititute geom_jitter(), geom_count(), or geom_bin2d() and see what those do in the place of geompoint(). What that bit of the function is doing is telling the computer what kind of graph you want to make. Want to make different graphs? Explore different options by asking the console ?geom_point.
+
+# Now let's compare the de-stemmed abstracts with the abstracts.
+
+```{r}
+dfm_abstracts_with_stems <- dfm(
+  abstract_tokens_no_stop, 
+  tolower = TRUE,
+  remove_padding = FALSE
+)
+
+# checking out the top features, making a data set out of the top features
+topfeatures(dfm_abstracts_with_stems, 100)
+
+abstracts_top_25_tokens <- textstat_frequency(dfm_abstracts_with_stems, n = 25) 
+
+abstracts_top_25_tokens$feature <- with(
+    abstracts_top_25_tokens, 
+    reorder(feature, -frequency)
+  )
+
+ggplot(abstracts_top_25_tokens, aes(
+  x = feature, y = frequency)) + 
+  geom_point() +
+  theme(axis.text = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Top 25 tokens in TC article abstracts 2005-2023")
+
+```
+
+# Let's compare visually
+
+:::{layout-ncol="2"}
+```{r}
+ggplot(abstracts_top_25_stems, aes(
+  x = feature, y = frequency)) + 
+  geom_point() +
+  theme(axis.text = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Top 25 stems in TC article abstracts 2005-2023")
+```
+```{r}
+ggplot(abstracts_top_25_tokens, aes(
+  x = feature, y = frequency)) + 
+  geom_point() +
+  theme(axis.text = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Top 25 tokens in TC article abstracts 2005-2023")
+
+```
+:::
+
+# And across a table...
+:::{layout-ncol="2"}
+```{r}
+reactable(abstracts_top_25_stems)
+```
+```{r}
+reactable(abstracts_top_25_tokens)
+```
+:::
