@@ -6,6 +6,9 @@ code-overflow: wrap
 toc: true
 toc-location: left
 echo: TRUE
+project:
+  type: website
+  output-dir: docs
 ---
 
 # What are we doing?
